@@ -1,5 +1,10 @@
 # Lottie Bottom Navbar
 
+## IMPORTANT NOTE
+This is a fork of subsub project, where I have remove some of the dependencies that i didn't though were necessary and that shouldn't be in the library, but the responsability of the application.
+
+Normally the modifications have been pushed to his repo, but just in case i keep this one.
+
 A customisable bottom navigation bar with Lottie Animation
 
 ## Current Latest Version `1.2.0`
