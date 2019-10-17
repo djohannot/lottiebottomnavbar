@@ -105,35 +105,78 @@ task sourceJar(type: Jar) {
 }
 
 publishing {
+    repositories {
+        maven {
+            url 'https://mymavenrepo.com/repo/XQBzsTNyWVnDM7GQ6GKm/'
+        }
+    }
+
     publications {
-        bottomNavbar(MavenPublication) {
-            artifact sourceJar
+        maven(MavenPublication) {
+            groupId 'com.ysdc'
+            artifactId 'lottiebar'
+            version = '1.0.0'
+
             artifact "$buildDir/outputs/aar/library-release.aar"
-            groupId group
-            artifactId "bottomnavbarlib"
-            version versi
 
             pom.withXml {
-                def root = asNode()
-                root.appendNode('description', 'A customisable bottom navbar with Lottie (c) capability')
-                root.appendNode('name', 'Lottie Button Navigation Bar')
-                root.appendNode('url', 'https://github.com/subsub/lottiebottomnavbar')
-                root.children().last() + pomConfig
+                final dependenciesNode = asNode().appendNode('dependencies')
 
-                def dependenciesNode = asNode().appendNode('dependencies')
-                // Iterate over the implementation dependencies (we don't want the test ones), adding a <dependency> node for each
-                configurations.implementation.allDependencies.each {
-                    // Ensure dependencies such as fileTree are not included.
-                    if (it.name != 'unspecified') {
-                        def dependencyNode = dependenciesNode.appendNode('dependency')
-                        dependencyNode.appendNode('groupId', it.group)
-                        dependencyNode.appendNode('artifactId', it.name)
-                        dependencyNode.appendNode('version', it.version)
+                ext.addDependency = { Dependency dep, String scope ->
+                    if (dep.group == null || dep.version == null || dep.name == null || dep.name == "unspecified")
+                        return // ignore invalid dependencies
+
+                    final dependencyNode = dependenciesNode.appendNode('dependency')
+                    dependencyNode.appendNode('groupId', dep.group)
+                    dependencyNode.appendNode('artifactId', dep.name)
+                    dependencyNode.appendNode('version', dep.version)
+                    dependencyNode.appendNode('scope', scope)
+
+                    if (!dep.transitive) {
+                        // If this dependency is transitive, we should force exclude all its dependencies them from the POM
+                        final exclusionNode = dependencyNode.appendNode('exclusions').appendNode('exclusion')
+                        exclusionNode.appendNode('groupId', '*')
+                        exclusionNode.appendNode('artifactId', '*')
+                    } else if (!dep.properties.excludeRules.empty) {
+                        // Otherwise add specified exclude rules
+                        final exclusionNode = dependencyNode.appendNode('exclusions').appendNode('exclusion')
+                        dep.properties.excludeRules.each { ExcludeRule rule ->
+                            exclusionNode.appendNode('groupId', rule.group ?: '*')
+                            exclusionNode.appendNode('artifactId', rule.module ?: '*')
+                        }
                     }
                 }
+
+                // List all "compile" dependencies (for old Gradle)
+                configurations.compile.getDependencies().each { dep -> addDependency(dep, "compile") }
+                // List all "api" dependencies (for new Gradle) as "compile" dependencies
+                configurations.api.getDependencies().each { dep -> addDependency(dep, "compile") }
+                // List all "implementation" dependencies (for new Gradle) as "runtime" dependencies
+                configurations.implementation.getDependencies().each { dep -> addDependency(dep, "runtime") }
             }
         }
     }
+}
+
+task androidJavadocs(type: Javadoc) {
+    source = android.sourceSets.main.java.srcDirs
+    classpath += project.files(android.getBootClasspath().join(File.pathSeparator))
+    android.libraryVariants.all { variant ->
+        if (variant.name == 'release') {
+            owner.classpath += variant.javaCompile.classpath
+        }
+    }
+    exclude '**/R.html', '**/R.*.html', '**/index.html'
+}
+
+task androidJavadocsJar(type: Jar, dependsOn: androidJavadocs) {
+    classifier = 'javadoc'
+    from androidJavadocs.destinationDir
+}
+
+task androidSourcesJar(type: Jar) {
+    classifier = 'sources'
+    from android.sourceSets.main.java.srcDirs
 }
 
 task customClean(type: Delete) {
